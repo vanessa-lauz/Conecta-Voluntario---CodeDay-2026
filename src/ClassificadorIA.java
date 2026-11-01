@@ -16,30 +16,45 @@ public class ClassificadorIA {
     public String classificar(String textoVoluntario) throws Exception {
         try {
             String json = """
-        {
-          "model": "gemini-3.6-flash",
-          "input": "Você é o classificador do sistema Conecta Voluntário. Analise o texto do usuário e classifique a intenção principal em UMA destas categorias: animais, pessoas com deficiencia, combate ao cancer, indefinido ou fora do escopo. Use animais quando o usuário quiser ajudar animais ou instituições de proteção animal, incluindo doações de alimentos, ração, roupas, agasalhos, medicamentos, produtos de limpeza ou dinheiro. Use pessoas com deficiencia quando quiser ajudar pessoas com deficiência ou instituições relacionadas, incluindo doações de alimentos, roupas, agasalhos, medicamentos, materiais de limpeza ou dinheiro. Use combate ao cancer quando quiser ajudar pessoas afetadas pelo câncer ou instituições relacionadas, incluindo doações de alimentos, roupas, agasalhos, medicamentos ou dinheiro. Ajuda financeira pode ser destinada a qualquer uma das três categorias quando o usuário indicar a área que deseja ajudar. Use indefinido quando a pessoa demonstra vontade de ajudar, mas não fornece informações suficientes para identificar uma área. Isso inclui quando ela menciona apenas um recurso ou item que deseja doar, como dinheiro, roupas, agasalhos, alimentos, medicamentos ou produtos de limpeza, sem indicar quem deseja ajudar. Use fora do escopo quando o texto não tiver relação com ajudar pessoas, animais ou organizações. Considere palavras com significado semelhante, como agasalho e roupa. Responda SOMENTE com o nome da categoria, sem explicação. Texto: %s"
-        }
-        """.formatted(textoVoluntario);
-
+                {
+                  "model": "gemini-3.6-flash",
+                  "input": "Você é o classificador do sistema Conecta Voluntário. Classifique o texto em UMA categoria: animais, pessoas com deficiencia, combate ao cancer, indefinido ou fora do escopo.
+                    
+                               Animais: menciona animais, gatos, cães, cachorros ou pets.
+                               Pessoas com deficiencia: menciona pessoas com deficiência ou PCD.
+                               Combate ao cancer: menciona câncer ou pessoas com câncer.
+                               Indefinido: quer ajudar/doar ou menciona algo para doação, mas não informa para quem.
+                               Fora do escopo: quer ajudar um público que não pertence às três categorias, como mulheres, crianças ou idosos.
+                    
+                               Exemplos: Gosto de gatos = animais; Tenho medicamentos = indefinido; Quero doar ração = indefinido; Quero doar ração para gatos = animais; Quero ajudar mulheres = fora do escopo; Quero ajudar pessoas com deficiência = pessoas com deficiencia; Quero ajudar pessoas com câncer = combate ao cancer.
+                    
+                               Responda SOMENTE com o nome da categoria. Texto: %s"
+                }
+                """.formatted(textoVoluntario);
             HttpClient client = HttpClient.newBuilder()
                     .connectTimeout(Duration.ofSeconds(10))
                     .build();
-
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create("https://generativelanguage.googleapis.com/v1/interactions"))
+                    .uri(URI.create(
+                            "https://generativelanguage.googleapis.com/v1/interactions"))
                     .header("Content-Type", "application/json; charset=utf-8")
                     .header("x-goog-api-key", apiKey)
-                    .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+                    .POST(HttpRequest.BodyPublishers.ofString(
+                            json, StandardCharsets.UTF_8))
                     .timeout(Duration.ofSeconds(60))
                     .build();
             System.out.println("JSON enviado: " + json);
             HttpResponse<String> response =
                     client.send(request, HttpResponse.BodyHandlers.ofString());
-
+            if (response.statusCode() == 429) {
+                System.out.println("Gemini HTTP 429 - limite de uso atingido.");
+                System.out.println("Resposta Gemini: " + response.body());
+                throw new RuntimeException("LIMITE_GEMINI");
+            }
             if (response.statusCode() != 200) {
                 System.out.println("Gemini HTTP " + response.statusCode());
                 System.out.println("Resposta Gemini: " + response.body());
+
                 return classificacaoLocal(textoVoluntario);
             }
             String resposta = response.body();
@@ -57,11 +72,13 @@ public class ClassificadorIA {
                     && !categoria.equals("combate ao cancer")
                     && !categoria.equals("indefinido")
                     && !categoria.equals("fora do escopo")) {
-
                 return classificacaoLocal(textoVoluntario);
             }
             return categoria;
         } catch (Exception e) {
+            if ("LIMITE_GEMINI".equals(e.getMessage())) {
+                throw e;
+            }
             e.printStackTrace();
             System.out.println("Gemini indisponível. Usando modo de demonstração.");
             return classificacaoLocal(textoVoluntario);
