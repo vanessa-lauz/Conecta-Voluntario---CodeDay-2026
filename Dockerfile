@@ -12,7 +12,7 @@ COPY frontend /app/frontend
 
 #compíla os arquivos java
 RUN javac -d /app/out /app/src/*.java
-#diz a porta usada pelo server
+#porta usado pelo servidor (essa é a padrão do Render (10000)). Localmente o servidor usa 8080 se a variavel PORT nao existir
 EXPOSE 10000
 #quando container inicia, executa esse CoManDo e inicia o servidor.
 CMD ["java", "-cp", "/app/out", "Servidor"]
